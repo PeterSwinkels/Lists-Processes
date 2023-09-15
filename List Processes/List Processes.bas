@@ -2,7 +2,7 @@ Attribute VB_Name = "ListProcessesModule"
 'This module contains this program's core procedures.
 Option Explicit
 
-'The Microsoft Windows API constants, functions, and structures used byt this program:
+'Defines the Microsoft Windows API constants, functions, and structures used byt this program.
 Private Type LUID
    LowPart As Long
    HighPart As Long
@@ -34,7 +34,6 @@ Private Type THREADENTRY32
    dwFlags As Long
 End Type
 
-Private Const ERROR_INVALID_PARAMETER As Long = 87
 Private Const ERROR_NO_MORE_FILES As Long = 18
 Private Const ERROR_PARTIAL_COPY As Long = 299
 Private Const ERROR_SUCCESS As Long = 0
@@ -73,9 +72,9 @@ Private Declare Function Thread32Next Lib "Kernel32.dll" (ByVal hObject As Long,
 Private Declare Function VDMEnumProcessWOW Lib "vdmdbg.dll" (ByVal fp As Long, lparam As Long) As Integer
 Private Declare Function VDMEnumTaskWOWEx Lib "vdmdbg.dll " (ByVal dwProcessId As Long, ByVal fp As Long, lparam As Long) As Integer
 
-'The constants, structures, and variables used by this program:
+'Defines the constants, structures, and variables used by this program.
 
-Private Const MAX_STRING As Long = 65535   'The maximum length allowed for a string buffer
+Private Const MAX_STRING As Long = 65535   'Defines the maximum length allowed for a string buffer
 Private Const NO_MODULEH As Long = 0       'Indicates "No module handle."
 Private Const NO_PROCESSH As Long = 0      'Indicates "No process handle."
 Private Const NO_PROCESSID As Long = 0     'Indicates "No process id."
@@ -83,16 +82,16 @@ Private Const NO_THREADID As Long = 0      'Indicates "No thread id."
 
 'This structure defines a WOW process:
 Private Type WOWProcessStr
-   ModuleH() As Long      'The list of module handles.
-   ModulePath() As Long   'The list of module paths.
-   Path() As String       'The path of the process.
-   ProcessId As Long      'The process id.
-   ThreadId() As Long     'The list of thread ids.
+   ModuleH() As Long      'Defines the list of module handles.
+   ModulePath() As Long   'Defines the list of module paths.
+   Path() As String       'Defines the path of the process.
+   ProcessId As Long      'Defines the process id.
+   ThreadId() As Long     'Defines the list of thread ids.
 End Type
 
-Private OutputFileH As Long             'The handle of the output file.
-Private ThreadWindowCount As Long       'The number of windows attached to a thread.
-Private WOWProcesses() As WOWProcessStr 'Contains the list WOW processes.
+Private OutputFileH As Long               'Defines the handle of the output file.
+Private ThreadWindowCount As Long         'Defines the number of windows attached to a thread.
+Private WOWProcesses() As WOWProcessStr   'Contains the list WOW processes.
 
 'This procedure checks whether an error has occurred during the most recent Windows API call.
 Private Function CheckForError(ReturnValue As Long, Optional Ignored As Long = ERROR_SUCCESS) As Long
@@ -177,7 +176,7 @@ Dim Length As Long
 Dim Path As String
 Dim ProcessH As Long
 
-   Path = Empty
+   Path = vbNullString
    ProcessH = CheckForError(OpenProcess(PROCESS_ALL_ACCESS, CLng(False), ProcessId))
    If Not ProcessH = NO_PROCESSH Then
       Path = String$(MAX_PATH, vbNullChar)
@@ -212,7 +211,7 @@ Dim Length As Long
 Dim Path As String
 Dim ProcessH As Long
    
-   Path = Empty
+   Path = vbNullString
    ProcessH = CheckForError(OpenProcess(PROCESS_QUERY_INFORMATION, CLng(False), ProcessId))
    If Not ProcessH = NO_PROCESSH Then
       Path = String$(MAX_PATH, vbNullChar)
@@ -315,75 +314,74 @@ Dim ModuleH() As Long
 Dim Path As String
 Dim ProcessIds() As Long
 Dim Threads() As THREADENTRY32
-
-   CheckForError OpenProcess(PROCESS_ALL_ACCESS, CLng(True), 4494)
-   
+  
    ChDrive Left$(App.Path, InStr(App.Path, ":"))
    ChDir App.Path
    
    With App
       Path = InputBox$("Write process data to:", .Title & " v" & CStr(.Major) & "." & CStr(.Minor) & CStr(.Revision) & " - by: " & .CompanyName, ".\Processes.txt")
    End With
-   If Path = Empty Then Exit Sub
    
-   OutputFileH = FreeFile()
-   Open Path For Output As OutputFileH
-      SetPrivilege SE_DEBUG_NAME, SE_PRIVILEGE_ENABLED
-   
-      ProcessIds() = GetProcessIds()
-      Threads() = GetThreads()
+   If Not Path = vbNullString Then
+      OutputFileH = FreeFile()
+      Open Path For Output As OutputFileH
+         SetPrivilege SE_DEBUG_NAME, SE_PRIVILEGE_ENABLED
       
-      For ProcessIndex = LBound(ProcessIds()) To UBound(ProcessIds())
-         If Not ProcessIds(ProcessIndex) = NO_PROCESSID Then
-            Print #OutputFileH, "Process: "; CStr(ProcessIds(ProcessIndex)); " "; GetProcessPath(ProcessIds(ProcessIndex))
-            Print #OutputFileH, "64 bit: "; CStr(Not Is32BitProcess(ProcessIds(ProcessIndex)))
-            
-            Print #OutputFileH, "Threads:"
-            For ThreadIndex = LBound(Threads()) To UBound(Threads())
-               If Threads(ThreadIndex).th32OwnerProcessID = ProcessIds(ProcessIndex) Then
-                  ThreadWindowCount = 0
-                  EnumThreadWindows Threads(ThreadIndex).th32ThreadID, AddressOf HandleThreadWindows, CLng(0)
-                  Print #OutputFileH, " "; CStr(Threads(ThreadIndex).th32ThreadID);
-                  If ThreadWindowCount > 0 Then Print #OutputFileH, " [Windows: "; CStr(ThreadWindowCount); "]";
-                  Print #OutputFileH,
-               End If
-            Next ThreadIndex
-            
-            ModuleH() = GetModuleHandles(ProcessIds(ProcessIndex))
-            Print #OutputFileH, "Modules:"
-            For ModuleIndex = LBound(ModuleH()) To UBound(ModuleH())
-               If Not ModuleH(ModuleIndex) = NO_MODULEH Then
-                  Print #OutputFileH, " "; CStr(ModuleH(ModuleIndex)); " "; GetModulePath(ModuleH(ModuleIndex), ProcessIds(ProcessIndex))
-                  With GetModuleMemoryInformation(ProcessIds(ProcessIndex), ModuleH(ModuleIndex))
-                     Print #OutputFileH, "  Entry point: "; CStr(.EntryPoint)
-                     Print #OutputFileH, "  DLL base: "; CStr(.lpBaseOfDLL)
-                     Print #OutputFileH, "  Image size: "; CStr(.SizeOfImage)
-                  End With
-               End If
-            Next ModuleIndex
-            Print #OutputFileH,
-         End If
-      Next ProcessIndex
-      
-      ReDim WOWProcesses(0 To 0) As WOWProcessStr
-      VDMEnumProcessWOW AddressOf HandleWOWProcesses, CLng(0)
-      For ProcessIndex = LBound(WOWProcesses()) To UBound(WOWProcesses())
-         With WOWProcesses(ProcessIndex)
-            If Not .ProcessId = NO_PROCESSID Then
-               Print #OutputFileH, "Process: "; CStr(WOWProcesses(ProcessIndex).ProcessId)
-               For ThreadIndex = LBound(.ThreadId()) To UBound(.ThreadId())
-                  If Not .ThreadId(ThreadIndex) = NO_THREADID Then
-                     Print #OutputFileH, "Thread: "; CStr(.ThreadId(ThreadIndex))
-                     Print #OutputFileH, "Module: "; CStr(.ModuleH(ThreadIndex)); " "; .ModulePath(ThreadIndex)
-                     Print #OutputFileH, "Path: "; .Path(ThreadIndex)
+         ProcessIds() = GetProcessIds()
+         Threads() = GetThreads()
+         
+         For ProcessIndex = LBound(ProcessIds()) To UBound(ProcessIds())
+            If Not ProcessIds(ProcessIndex) = NO_PROCESSID Then
+               Print #OutputFileH, "Process: "; CStr(ProcessIds(ProcessIndex)); " "; GetProcessPath(ProcessIds(ProcessIndex))
+               Print #OutputFileH, "64 bit: "; CStr(Not Is32BitProcess(ProcessIds(ProcessIndex)))
+               
+               Print #OutputFileH, "Threads:"
+               For ThreadIndex = LBound(Threads()) To UBound(Threads())
+                  If Threads(ThreadIndex).th32OwnerProcessID = ProcessIds(ProcessIndex) Then
+                     ThreadWindowCount = 0
+                     EnumThreadWindows Threads(ThreadIndex).th32ThreadID, AddressOf HandleThreadWindows, CLng(0)
+                     Print #OutputFileH, " "; CStr(Threads(ThreadIndex).th32ThreadID);
+                     If ThreadWindowCount > 0 Then Print #OutputFileH, " [Windows: "; CStr(ThreadWindowCount); "]";
+                     Print #OutputFileH,
                   End If
                Next ThreadIndex
+               
+               ModuleH() = GetModuleHandles(ProcessIds(ProcessIndex))
+               Print #OutputFileH, "Modules:"
+               For ModuleIndex = LBound(ModuleH()) To UBound(ModuleH())
+                  If Not ModuleH(ModuleIndex) = NO_MODULEH Then
+                     Print #OutputFileH, " "; CStr(ModuleH(ModuleIndex)); " "; GetModulePath(ModuleH(ModuleIndex), ProcessIds(ProcessIndex))
+                     With GetModuleMemoryInformation(ProcessIds(ProcessIndex), ModuleH(ModuleIndex))
+                        Print #OutputFileH, "  Entry point: "; CStr(.EntryPoint)
+                        Print #OutputFileH, "  DLL base: "; CStr(.lpBaseOfDLL)
+                        Print #OutputFileH, "  Image size: "; CStr(.SizeOfImage)
+                     End With
+                  End If
+               Next ModuleIndex
+               Print #OutputFileH,
             End If
-         End With
-      Next ProcessIndex
+         Next ProcessIndex
+         
+         ReDim WOWProcesses(0 To 0) As WOWProcessStr
+         VDMEnumProcessWOW AddressOf HandleWOWProcesses, CLng(0)
+         For ProcessIndex = LBound(WOWProcesses()) To UBound(WOWProcesses())
+            With WOWProcesses(ProcessIndex)
+               If Not .ProcessId = NO_PROCESSID Then
+                  Print #OutputFileH, "Process: "; CStr(WOWProcesses(ProcessIndex).ProcessId)
+                  For ThreadIndex = LBound(.ThreadId()) To UBound(.ThreadId())
+                     If Not .ThreadId(ThreadIndex) = NO_THREADID Then
+                        Print #OutputFileH, "Thread: "; CStr(.ThreadId(ThreadIndex))
+                        Print #OutputFileH, "Module: "; CStr(.ModuleH(ThreadIndex)); " "; .ModulePath(ThreadIndex)
+                        Print #OutputFileH, "Path: "; .Path(ThreadIndex)
+                     End If
+                  Next ThreadIndex
+               End If
+            End With
+         Next ProcessIndex
+   End If
    
 EndRoutine:
-      SetPrivilege SE_DEBUG_NAME, SE_PRIVILEGE_DISABLED
+   SetPrivilege SE_DEBUG_NAME, SE_PRIVILEGE_DISABLED
    Close OutputFileH
    Exit Sub
    
@@ -400,7 +398,7 @@ Dim Text As String * MAX_SHORT_STRING
 
    CheckForError lstrcpy(Text, Pointer)
    Index = InStr(Text, vbNullChar)
-   If Index > 0 Then Text = Left$(Text, Index - 1) Else Text = Empty
+   If Index > 0 Then Text = Left$(Text, Index - 1) Else Text = vbNullString
    
    PointerToString = Text
 End Function
